@@ -1,0 +1,205 @@
+Testing Examples    Plesk CP
+
+After Plesk is installed make sure that quota is turned on and that mail management functions are enabled in Panel before installing accounts from this script
+
+
+package
+    •    BWLIMIT CGI CPMOD FEATURELIST FRONTPAGE HASSHELL IP LANG MAXADDON MAXFTP MAXLST MAXPARK MAXPOP MAXSQL MAXSUB example7.com
+features - cpanel UI
+    •    addoncgi addondomains cron emailauth errpgs ftpaccts lists parkeddomains simplezoneedit spamassassin spambox sslinstall sslmanager statselect subdomains webprotect zoneedit
+
+143         disk_space       => 'example7.com',
+144         max_db           => 'MAXSQL',
+145         max_dom_aliases  => 'MAXPARK',
+146         max_site         => 'MAXADDON',
+147         max_maillists    => 'MAXLST',
+148         max_subdom       => 'MAXSUB',
+149         max_subftp_users => 'MAXFTP',
+150         max_box          => 'MAXPOP',
+151         cgi              => 'CGI',
+152         max_traffic      => 'BWLIMIT',
+153         shell            => 'HASSHELL',
+
+PACKAGE ^^^
+
+207         manage_crontab        => 'cron',
+208         manage_maillists      => 'lists',
+209         manage_dns            => [ 'zoneedit', 'simplezoneedit' ],
+210         manage_domain_aliases => 'parkeddomains',
+211         create_domains        => 'addondomains',
+212         manage_mail_settings  => 'popaccts',
+213         manage_protected_dirs => 'webprotect',
+214         manage_spamfilter     => [ 'spamassassin', 'spambox' ],
+215         manage_subdomains     => 'subdomains',
+216         manage_subftp         => 'ftpaccts',
+217         manage_webstat        => 'statselect',
+218         access_appcatalog     => 'addoncgi',
+219         errdocs               => 'errpgs',
+220         ssl                   => [ 'sslinstall', 'sslmanager' ],
+
+
+Script:   
+--------------------------
+#!/bin/bash
+
+###   add IP's section
+for x in 4 5 6; do /usr/local/psa/bin/ipmanage --create 192.168.99.10$x -mask 255.255.255.0 -interface eth0 -type exclusive; done
+for x in 1; do /usr/local/psa/bin/ipmanage --create 192.168.99.10$x -mask 255.255.255.0 -interface eth0 -type shared; done
+
+### add clients and resellers
+for x in 7 8 9; do /usr/local/psa/bin/customer --create migclient$x -name "Migration User$x" -passwd sample -email c$x@client$x.com -country us -notify false; done
+for x in 7 8 9; do /usr/local/psa/bin/reseller --create migreseller$x -name "Reseller User$x" -passwd sample -email r$x@reseller$x.net -country US -notify false; done
+for y in 7 8 9; do for x in 4 5 6; do /usr/local/psa/bin/customer --create migclient$y$x -name "Res Client$y$x" -passwd sample -email c$x@resclient$y.com -country us -owner migreseller$y -notify false; done; done
+
+### add service plans for resellers
+for x in 7 8 9; do /usr/local/psa/bin/service_plan -c "Personal Sites Reseller $x" -hosting true -disk_space 500M -max_traffic 1G -owner migreseller$x; done
+
+###  add service plans to test with
+/usr/local/psa/bin/service_plan -c "Personal Sites Clients" -hosting true -disk_space 555M -max_traffic 4096M -max_box 100 -mbox_quota 2G -quota 3G -max_wu 5 -max_subftp_users 6 -max_db 7 -max_maillists 8 -max_subdom 9 -max_site 10 -maillist true -php true -cgi true -perl true -webstat webalizer -webstat awstats -webstat_protdir true  -dns_zone_type master -manage_crontab true -manage_subdomains true  -manage_sh_access true -manage_domain_aliases true -shell /bin/sh
+
+### add hosting domains to the clients
+for x in 7; do /usr/local/psa/bin/subscription --create example$x.com -owner migclient$x -service-plan "Default Domain" -ip 192.168.99.101 -login clientuser$x -passwd "userpass" -hosting true -notify false; /usr/local/psa/bin/mail --create migclient$x.user@example$x.com -passwd mypass -mbox_quota 50M -mailbox true;  /usr/local/psa/bin/database --create migration$x -domain example$x.com -server localhost:3306 -type mysql -add_user migcl_user$x -passwd simple; done
+
+for x in 8 9; do /usr/local/psa/bin/subscription --create example$x.com -owner migclient$x -service-plan "Personal Sites Clients" -ip 192.168.99.101 -login clientuser$x -passwd "userpass" -hosting true -notify false; /usr/local/psa/bin/mail --create migclient$x.user@example$x.com -passwd mypass -mbox_quota 50M -mailbox true;  /usr/local/psa/bin/database --create migration$x -domain example$x.com -server localhost:3306 -type mysql -add_user migcl_user$x -passwd simple; done
+
+
+for x in 7 8 9; do /usr/local/psa/bin/subscription --create resexample$x.com -owner migreseller$x -service-plan "Personal Sites Reseller $x" -ip 192.168.99.101 -login reselleruser$x -passwd "userpass" -hosting true -notify false; /usr/local/psa/bin/mail --create migreseller$x.user@resexample$x.com -passwd mypass -mbox_quota 50M  -mailbox true;  /usr/local/psa/bin/database --create resmigration$x -domain resexample$x.com -server localhost:3306 -type mysql -add_user resmigcl_user$x -passwd simple; done
+
+for y in 7 8 9; do for x in 4 5 6; do /usr/local/psa/bin/subscription --create resclientexample$y$x.com -owner  migclient$y$x -ip 192.168.99.101 -login reselleruser$y$x -passwd "userpass" -hosting true -notify false; /usr/local/psa/bin/mail --create reselleruser$y$x.user@resclientexample$y$x.com -passwd mypass -mbox_quota 50M  -mailbox true; /usr/local/psa/bin/database --create resclientmigration$y$x -domain resclientexample$y$x.com -server localhost:3306 -type mysql -add_user rescl_user$y$x -passwd simple; done; done
+
+### update root clients service plans
+for x in 8 9; do /usr/local/psa/bin/subscription --update example$x.com -service-plan "Personal Sites Clients"  -notify false; done
+
+### update reseller clients service plans
+for x in 7 8 9; do /usr/local/psa/bin/service_plan -u "Personal Sites Reseller $x" -quota 10G  -owner migreseller$x; done
+
+### update reseller client service plan 
+/usr/local/psa/bin/subscription --switch-subscription resclientexample85.com -service-plan "Personal Sites Reseller 8"
+/usr/local/psa/bin/subscription --sync-subscription resclientexample85.com
+
+### change shared IP to dedicated IP for reseller domains
+/usr/local/psa/bin/ipmanage --update 192.168.99.104 -type shared
+/usr/local/psa/bin/ip_pool --add 192.168.99.104 -type shared -owner migreseller9
+/usr/local/psa/bin/ip_pool --add 192.168.99.106 -type exclusive -owner migreseller8
+/usr/local/psa/bin/subscription --update resclientexample94.com  -notify false -ssl true -ip 192.168.99.104
+/usr/local/psa/bin/subscription --update resclientexample84.com  -notify false -ssl true -ip 192.168.99.106
+
+### change IP from shared to dedicated for client domains
+for x in 7; do /usr/local/psa/bin/subscription --update example$x.com -ip 192.168.99.105  -ssl true  -notify false; done
+
+### add subdomains
+for x in 1 2 3; do /usr/local/psa/bin/subdomain -c sub$x -domain example7.com -ssi true -php true -ssl true -notify false; done
+
+### add domain alias
+/usr/local/psa/bin/domalias -c example8.net -domain example8.com -status enabled -mail true -notify false
+
+### add mailing lists
+/usr/local/psa/bin/maillist -c MailList -domain example9.com -passwd_type plain -passwd sample -notify false -email listadmin@example9.com
+
+### add webusers
+for x in 1 2 3;  do /usr/local/psa/bin/webuser -c johndoe$x -domain example9.com -passwd userpass -php true -quota 100M; done
+
+### add ftpuser
+/usr/local/psa/bin/ftpsubaccount --create JohnDoeFTP -domain example9.com -passwd userpass -home /httpdocs
+
+### add another site to an existing customer
+/usr/local/psa/bin/site -c example.org -webspace-name example9.com -hosting true -notify false
+
+exit 0
+-------------------
+
+Remove information script
+
+###  remove the IP's 
+for x in 7 8 9; do /usr/local/psa/bin/customer --remove migclient$x; done
+for x in 7 8 9; do /usr/local/psa/bin/reseller --remove migreseller$x; done
+/usr/local/psa/bin/service_plan --remove "Personal Sites Clients" 
+for x in 1 4 5 6; do /usr/local/psa/bin/ipmanage --remove 192.168.99.10$x; done
+
+
+Email creation:
+
+1380658497.M194373P28971V00000000000000BAI0000000012A60496.vps4.example7.com,S=43817:2,S
+1380668006.M77309P28049V00000000000000BAI0000000012A60498.vps4.example7.com,S=59609:2,S
+1380673203.M26692P28182V00000000000000BAI0000000012A6049C.vps4.example7.com,S=36679:2,S
+1380723484.M110290P7709V00000000000000BAI0000000012A6049A.vps4.example7.com,S=17766:2,S
+1380734616.M440556P13977V00000000000000BAI0000000050E0806E.vps4.example7.com,S=196649:2,S
+1381158612.M712534P25108V00000000000000BAI0000000012A604A6.vps4.example7.com,S=7764:2,S
+1381257971.M966639P29639V00000000000000BAI0000000012A604AA.vps4.example7.com,S=9368:2,S
+
+Limits list from Plesk:
+
+Domain 'example7.com' permissions:
+manage_dns                     true             DNS zone management
+manage_phosting                false            Hosting settings management
+manage_php_settings            false            Common PHP settings management
+allow_insecure_sites           true             Setup of potentially insecure web scripting options that override provider's policy
+manage_sh_access               false            Can allow access only to a chrooted environment
+manage_anonftp                 false            Anonymous FTP management
+manage_crontab                 false            Scheduler management
+manage_spamfilter              true             Spam filter management
+manage_virusfilter             true             Antivirus management
+allow_local_backups            true             Data backup and restoration using the server repository
+allow_ftp_backups              true             Data backup and restoration using a personal FTP repository
+manage_webstat                 true             Web statistics management
+manage_log                     true             Log rotation management
+access_appcatalog              true             Access to Application Catalog
+allow_license_stubs            false            Allow activating APS apps using license keys from the Panel license pool
+create_domains                 true             Domains management
+manage_subdomains              true             Subdomains management
+manage_domain_aliases          false            Domain aliases management
+manage_subftp                  true             Additional FTP accounts management
+manage_webapps                 false            Java applications management
+manage_mail_settings           true             Ability to change mail settings
+manage_maillists               true             Mailing lists management
+manage_performance             false            Hosting performance settings management
+manage_quota                   false            Hard disk quota assignment
+select_db_server               false            Database server selection
+manage_website_maintenance     true             Access to advanced operations: Website Copying
+manage_protected_dirs          true             Password-protected directories management
+access_service_users           true             Ability to manage auxiliary user accounts
+manage_not_chroot_shell        false            Can allow access to any type of shell
+
+Domain 'example7.com' limits:
+max_site                       10               Domains
+max_subdom                     Unlimited        Subdomains
+max_dom_aliases                Unlimited        Domain aliases
+disk_space                     10 GB            Disk space
+disk_space_soft                Unlimited        Notify when disk space usage reaches
+max_traffic                    100 GB/month     Traffic
+max_traffic_soft               Unlimited        Notify when traffic usage reaches
+max_wu                         Unlimited        Web users
+max_subftp_users               Unlimited        Additional FTP accounts
+max_db                         10               Databases
+max_box                        100              Mailboxes
+mbox_quota                     100 MB           Mailbox size
+max_maillists                  100              Mailing lists
+max_webapps                    0                Java applications
+max_site_builder               1                Sites published with Presence Builder
+max_unity_mobile_sites         0                Mobile Sites
+expiration                     Unlimited        Expiration date
+expiration_soft                Dec 31, 1969     [[expiration_soft]]
+Overuse policy                 not_suspend
+
+What to do with mail sent to nonexistent users:   'reject'
+WWW:                                              true
+Webmail:                                          roundcube
+Allow web users to use scripts:                   true
+Retain web and traffic statistics:                3
+Domain status:                                    Domain is active.
+
+======
+
+Features that we need to test:
+
+SSL certificates
+Password Protected Directories
+SPF
+DKIM
+Custom DNS zone records
+Postgres database
+Tomcat apps
+Shell access
+CGI previleges
+
+
